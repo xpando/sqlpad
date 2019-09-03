@@ -2,6 +2,7 @@ const uuid = require('uuid');
 const config = require('../lib/config');
 const utils = require('./utils');
 const getMeta = require('../lib/getMeta');
+const secretResolver = require('../lib/secrets');
 
 const debug = config.get('debug');
 
@@ -108,7 +109,13 @@ if (debug || process.env.SQLPAD_TEST === 'true') {
  * @param {object} [user] user may not be provided if chart links turned on
  * @returns {Promise}
  */
-function runQuery(query, connection, user) {
+async function runQuery(query, connection, user) {
+  const secrets = await secretResolver.resolveSecrets(connection);
+  const conn = {
+    ...{ maxRows: Number.MAX_SAFE_INTEGER },
+    ...secrets
+  };
+
   const driver = drivers[connection.driver];
 
   const queryResult = {
@@ -123,7 +130,7 @@ function runQuery(query, connection, user) {
     rows: []
   };
 
-  return driver.runQuery(query, connection).then(results => {
+  return driver.runQuery(query, conn).then(results => {
     const { rows, incomplete } = results;
     if (!Array.isArray(rows)) {
       throw new Error(`${connection.driver}.runQuery() must return rows array`);
@@ -165,9 +172,14 @@ function runQuery(query, connection, user) {
  * it is considered a successful connection config
  * @param {object} connection
  */
-function testConnection(connection) {
+async function testConnection(connection) {
+  const secrets = await secretResolver.resolveSecrets(connection);
+  const conn = {
+    ...{ maxRows: Number.MAX_SAFE_INTEGER },
+    ...secrets
+  };
   const driver = drivers[connection.driver];
-  return driver.testConnection(connection);
+  return driver.testConnection(conn);
 }
 
 /**
@@ -176,10 +188,14 @@ function testConnection(connection) {
  * @param {object} connection
  * @returns {Promise}
  */
-function getSchema(connection) {
-  connection.maxRows = Number.MAX_SAFE_INTEGER;
+async function getSchema(connection) {
+  const secrets = await secretResolver.resolveSecrets(connection);
+  const conn = {
+    ...{ maxRows: Number.MAX_SAFE_INTEGER },
+    ...secrets
+  };
   const driver = drivers[connection.driver];
-  return driver.getSchema(connection);
+  return driver.getSchema(conn);
 }
 
 /**
